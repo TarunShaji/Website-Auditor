@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AuditForm } from './components/AuditForm';
 import { AuditProgress } from './components/AuditProgress';
 import { AuditResults } from './components/AuditResults';
-import { Shield } from 'lucide-react';
+import { Shield, Sparkles } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:3001';
 
@@ -38,7 +38,7 @@ function App() {
       }
 
       const data = await response.json();
-      
+
       setAuditState(prev => ({
         ...prev,
         status: 'running',
@@ -61,7 +61,7 @@ function App() {
     const pollInterval = setInterval(async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/api/audit/${auditId}/status`);
-        
+
         if (!response.ok) {
           throw new Error('Failed to fetch audit status');
         }
@@ -75,7 +75,7 @@ function App() {
 
         if (data.status === 'completed') {
           clearInterval(pollInterval);
-          
+
           const resultResponse = await fetch(`${API_BASE_URL}/api/audit/${auditId}/result`);
           const result = await resultResponse.json();
 
@@ -88,7 +88,7 @@ function App() {
           });
         } else if (data.status === 'failed') {
           clearInterval(pollInterval);
-          
+
           setAuditState({
             status: 'error',
             auditId,
@@ -119,24 +119,41 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
-        <header className="mb-8">
-          <div className="flex items-center space-x-3 mb-2">
-            <Shield className="w-10 h-10 text-primary" />
-            <h1 className="text-4xl font-bold text-foreground">Verisite</h1>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      {/* Hero Section */}
+      <div className="bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 text-white">
+        <div className="container mx-auto px-4 py-12 max-w-6xl">
+          <div className="flex items-center space-x-4 mb-4">
+            <div className="relative">
+              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
+                <Shield className="w-8 h-8 text-white" />
+              </div>
+              <div className="absolute -top-1 -right-1">
+                <Sparkles className="w-5 h-5 text-yellow-400 animate-pulse" />
+              </div>
+            </div>
+            <div>
+              <h1 className="text-5xl font-extrabold bg-gradient-to-r from-white via-blue-100 to-indigo-200 bg-clip-text text-transparent">
+                Verisite
+              </h1>
+              <p className="text-blue-200 text-sm font-medium mt-1">
+                Professional Website Auditing Tool
+              </p>
+            </div>
           </div>
-          <p className="text-muted-foreground text-lg">
-            Deterministic Website Auditing Tool
+          <p className="text-blue-100/90 text-lg max-w-2xl leading-relaxed">
+            Crawl, analyze, and detect objective technical issues with deterministic precision.
+            No AI guesswork, just factual  findings.
           </p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Crawl, analyze, and detect objective technical issues
-          </p>
-        </header>
+        </div>
+      </div>
 
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="space-y-6">
           {auditState.status === 'idle' && (
-            <AuditForm onSubmit={startAudit} isLoading={false} />
+            <div className="transform transition-all duration-300 hover:scale-[1.01]">
+              <AuditForm onSubmit={startAudit} isLoading={false} />
+            </div>
           )}
 
           {(auditState.status === 'starting' || auditState.status === 'running') && (
@@ -145,7 +162,7 @@ function App() {
               <div className="text-center">
                 <button
                   onClick={resetAudit}
-                  className="text-sm text-muted-foreground hover:text-foreground"
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-4"
                 >
                   Cancel Audit
                 </button>
@@ -156,10 +173,10 @@ function App() {
           {auditState.status === 'completed' && auditState.result && (
             <>
               <AuditResults result={auditState.result} />
-              <div className="text-center">
+              <div className="text-center pt-4">
                 <button
                   onClick={resetAudit}
-                  className="px-6 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                  className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl font-semibold"
                 >
                   Start New Audit
                 </button>
@@ -168,16 +185,19 @@ function App() {
           )}
 
           {auditState.status === 'error' && (
-            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-6 text-center">
-              <div className="text-destructive text-xl font-semibold mb-2">
+            <div className="bg-gradient-to-br from-red-50 to-rose-50 border-2 border-red-200 rounded-xl p-8 text-center shadow-lg">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center">
+                <span className="text-3xl text-white">⚠</span>
+              </div>
+              <div className="text-red-900 text-2xl font-bold mb-2">
                 Audit Failed
               </div>
-              <div className="text-muted-foreground mb-4">
+              <div className="text-red-700 mb-6 max-w-md mx-auto">
                 {auditState.error}
               </div>
               <button
                 onClick={resetAudit}
-                className="px-6 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                className="px-8 py-3 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-xl hover:from-red-700 hover:to-rose-700 transition-all shadow-lg font-semibold"
               >
                 Try Again
               </button>
@@ -185,9 +205,10 @@ function App() {
           )}
         </div>
 
-        <footer className="mt-12 pt-8 border-t border-border text-center text-sm text-muted-foreground">
-          <p>
-            Verisite performs deterministic analysis only. No AI, no inference, no qualitative judgments.
+        <footer className="mt-16 pt-8 border-t border-slate-200 text-center">
+          <p className="text-sm text-slate-500">
+            Verisite performs <span className="font-semibold text-slate-700">deterministic analysis only</span>.
+            No AI, no inference, no qualitative judgments.
           </p>
         </footer>
       </div>
