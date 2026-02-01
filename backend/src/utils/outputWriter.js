@@ -32,7 +32,7 @@ export class OutputWriter {
   async writeAuditResults(auditId, result) {
     try {
       const auditDir = this.createAuditDirectory(auditId);
-      
+
       this.logger.info('Writing audit results to files', { auditId });
 
       await this.writeCrawledURLs(auditDir, result.pages);
@@ -40,16 +40,16 @@ export class OutputWriter {
       await this.writeSummary(auditDir, result);
       await this.writeFullResult(auditDir, result);
 
-      this.logger.success('Audit results written successfully', { 
+      this.logger.success('Audit results written successfully', {
         auditId,
-        directory: auditDir 
+        directory: auditDir
       });
 
       return auditDir;
     } catch (error) {
-      this.logger.error('Failed to write audit results', { 
-        auditId, 
-        error: error.message 
+      this.logger.error('Failed to write audit results', {
+        auditId,
+        error: error.message
       });
       throw error;
     }
@@ -57,7 +57,7 @@ export class OutputWriter {
 
   async writeCrawledURLs(auditDir, pages) {
     const filePath = path.join(auditDir, 'crawled-urls.txt');
-    
+
     const lines = [
       '# CRAWLED URLs',
       `# Total: ${pages.length}`,
@@ -73,9 +73,9 @@ export class OutputWriter {
     }
 
     fs.writeFileSync(filePath, lines.join('\n'), 'utf-8');
-    this.logger.info('Crawled URLs written', { 
+    this.logger.info('Crawled URLs written', {
       file: 'crawled-urls.txt',
-      count: pages.length 
+      count: pages.length
     });
   }
 
@@ -96,13 +96,13 @@ export class OutputWriter {
     for (const [issueType, issueList] of Object.entries(issuesByType)) {
       const fileName = `${issueType.toLowerCase()}.txt`;
       const filePath = path.join(issuesDir, fileName);
-      
+
       const lines = [
         `# ${issueType}`,
         `# Count: ${issueList.length}`,
         `# Generated: ${new Date().toISOString()}`,
         '',
-        '=' .repeat(80),
+        '='.repeat(80),
         ''
       ];
 
@@ -110,7 +110,7 @@ export class OutputWriter {
         const issue = issueList[i];
         lines.push(`## Issue ${i + 1} of ${issueList.length}`);
         lines.push('');
-        
+
         lines.push(this.formatIssue(issue));
         lines.push('');
         lines.push('-'.repeat(80));
@@ -120,15 +120,15 @@ export class OutputWriter {
       fs.writeFileSync(filePath, lines.join('\n'), 'utf-8');
     }
 
-    this.logger.info('Issue files written', { 
+    this.logger.info('Issue files written', {
       issueTypes: Object.keys(issuesByType).length,
-      totalIssues: issues.length 
+      totalIssues: issues.length
     });
   }
 
   formatIssue(issue) {
     const lines = [];
-    
+
     lines.push(`Type: ${issue.issue_type}`);
     lines.push(`Explanation: ${issue.explanation}`);
     lines.push('');
@@ -170,12 +170,12 @@ export class OutputWriter {
 
   async writeSummary(auditDir, result) {
     const filePath = path.join(auditDir, 'summary.txt');
-    
+
     const lines = [
       '# AUDIT SUMMARY',
       `# Generated: ${new Date().toISOString()}`,
       '',
-      '=' .repeat(80),
+      '='.repeat(80),
       '',
       `Seed URL: ${result.seed_url}`,
       `Pages Crawled: ${result.crawl_stats.pages_crawled}`,
@@ -183,7 +183,7 @@ export class OutputWriter {
       `Issues Found: ${result.crawl_stats.issues_found}`,
       `Duration: ${result.crawl_stats.duration_seconds}s`,
       '',
-      '=' .repeat(80),
+      '='.repeat(80),
       '',
       '## ISSUES BY TYPE',
       ''
@@ -197,7 +197,7 @@ export class OutputWriter {
     }
 
     lines.push('');
-    lines.push('=' .repeat(80));
+    lines.push('='.repeat(80));
 
     fs.writeFileSync(filePath, lines.join('\n'), 'utf-8');
     this.logger.info('Summary written', { file: 'summary.txt' });
@@ -211,5 +211,17 @@ export class OutputWriter {
 
   getOutputPath(auditId) {
     return path.join(this.outputDir, auditId);
+  }
+
+  /**
+   * Write arbitrary JSON file (for AI trace output)
+   */
+  async writeJSON(auditDir, filename, data) {
+    if (!fs.existsSync(auditDir)) {
+      fs.mkdirSync(auditDir, { recursive: true });
+    }
+    const filePath = path.join(auditDir, filename);
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    this.logger.debug('JSON file written', { file: filename });
   }
 }

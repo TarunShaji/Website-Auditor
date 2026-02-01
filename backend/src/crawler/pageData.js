@@ -6,7 +6,9 @@ export class PageData {
     this.http_status = null;
     this.final_url = null;
     this.redirect_chain = [];
+    this.fetch_error = null;
     this.headers = {};
+    this.html = null;
     this.title = null;
     this.h1s = [];
     this.meta_robots = null;
@@ -16,6 +18,7 @@ export class PageData {
     this.blocked_by_robots_rule = null;
     this.internal_outgoing_links = [];
     this.external_outgoing_links = [];
+    this.content_internal_links = [];  // NEW: For AI intent analysis only
     this.incoming_internal_link_count = 0;
     this.resources = {
       images: [],
@@ -23,11 +26,11 @@ export class PageData {
       stylesheets: []
     };
   }
-  
+
   isPage() {
     return this.resource_type === 'PAGE';
   }
-  
+
   isResource() {
     return this.resource_type === 'RESOURCE';
   }
@@ -40,18 +43,31 @@ export class PageData {
       http_status: this.http_status,
       final_url: this.final_url,
       redirect_chain: this.redirect_chain,
-      headers: this.headers,
+      fetch_error: this.fetch_error,
+
+      // SEO metadata
       title: this.title,
       h1s: this.h1s,
-      meta_robots: this.meta_robots,
       meta_description: this.meta_description,
+      meta_robots: this.meta_robots,
       x_robots_tag: this.x_robots_tag,
-      blocked_by_robots: this.blocked_by_robots,
-      blocked_by_robots_rule: this.blocked_by_robots_rule,
+
+      // Links
       internal_outgoing_links: this.internal_outgoing_links,
       external_outgoing_links: this.external_outgoing_links,
       incoming_internal_link_count: this.incoming_internal_link_count,
-      resources: this.resources
+      content_internal_links: this.content_internal_links,  // For AI intent analysis
+
+      // Robots blocking
+      blocked_by_robots: this.blocked_by_robots,
+      blocked_by_robots_rule: this.blocked_by_robots_rule,
+
+      // Resource counts (not full arrays - saves space)
+      resource_counts: {
+        images: this.resources?.images?.length || 0,
+        scripts: this.resources?.scripts?.length || 0,
+        stylesheets: this.resources?.stylesheets?.length || 0
+      }
     };
   }
 }

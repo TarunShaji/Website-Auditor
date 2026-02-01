@@ -10,19 +10,19 @@ export class Crawler {
     this.robotsParser = robotsParser;
     this.htmlParser = new HTMLParser(normalizer);
     this.logger = new Logger('CRAWLER');
-    
+
     this.maxPages = options.maxPages || 100;
     this.maxDepth = options.maxDepth || 5;
     this.maxRedirects = options.maxRedirects || 5;
     this.timeout = options.timeout || 10000;
-    
+
     this.queue = [];
     this.visited = new Set();
     this.pages = new Map();
     this.linkGraph = new Map();
-    
-    this.onProgress = options.onProgress || (() => {});
-    
+
+    this.onProgress = options.onProgress || (() => { });
+
     this.logger.info('Crawler initialized', {
       seedURL,
       maxPages: this.maxPages,
@@ -32,11 +32,11 @@ export class Crawler {
   }
 
   async crawl() {
-    const normalizedSeed = this.normalizer.normalize(this.seedURL);
-    this.queue.push({ url: normalizedSeed, depth: 0 });
-    
-    this.logger.info('Starting crawl', { seedURL: normalizedSeed });
-    
+    // DUMB CRAWLER: Use raw seed URL, no normalization
+    this.queue.push({ url: this.seedURL, depth: 0 });
+
+    this.logger.info('Starting crawl', { seedURL: this.seedURL });
+
     let pageCount = 0;
 
     while (this.queue.length > 0 && pageCount < this.maxPages) {
@@ -46,20 +46,20 @@ export class Crawler {
         this.logger.debug('Skipping already visited URL', { url });
         continue;
       }
-      
+
       if (depth > this.maxDepth) {
         this.logger.debug('Skipping URL exceeding max depth', { url, depth, maxDepth: this.maxDepth });
         continue;
       }
 
       this.visited.add(url);
-      
-      this.logger.info(`Crawling [${pageCount}/${this.maxPages} pages]`, { 
-        url, 
+
+      this.logger.info(`Crawling [${pageCount}/${this.maxPages} pages]`, {
+        url,
         depth,
-        queueSize: this.queue.length 
+        queueSize: this.queue.length
       });
-      
+
       this.onProgress({
         type: 'crawling',
         url: url,
@@ -83,7 +83,7 @@ export class Crawler {
 
       await this.fetchPage(url, pageData, depth);
       this.pages.set(url, pageData);
-      
+
       if (pageData.isPage()) {
         pageCount++;
         this.logger.debug('PAGE counted toward crawl budget', { url, pageCount });
@@ -104,19 +104,19 @@ export class Crawler {
 
     this.logger.info('Building incoming link counts (PAGE URLs only)');
     this.buildIncomingLinkCounts();
-    
+
     const result = {
       pages: Array.from(this.pages.values()).map(p => p.toJSON()),
       linkGraph: this.getLinkGraphData()
     };
-    
+
     this.logger.success('Crawl data prepared', {
       totalURLs: result.pages.length,
       htmlPages: result.pages.filter(p => p.resource_type === 'PAGE').length,
       resources: result.pages.filter(p => p.resource_type === 'RESOURCE').length,
       linkGraphNodes: Object.keys(result.linkGraph).length
     });
-    
+
     return result;
   }
 
@@ -124,18 +124,27 @@ export class Crawler {
     try {
       this.logger.debug('Fetching page', { url });
       const response = await this.fetchWithRedirects(url, pageData);
-      
+
+      // Fetch failed (max redirects, network error, etc.)
       if (!response) {
-        this.logger.error('Failed to fetch page (no response)', { url });
-        pageData.resource_type = 'RESOURCE';
+        this.logger.warn('Fetch failed - classifying as PAGE', {
+          url,
+          redirectChain: pageData.redirect_chain,
+          fetchError: pageData.fetch_error
+        });
+        pageData.resource_type = 'PAGE';
+        // fetch_error already set by fetchWithRedirects
+        if (!pageData.fetch_error) {
+          pageData.fetch_error = 'unknown_fetch_failure';
+        }
         return;
       }
 
       pageData.http_status = response.status;
       pageData.final_url = response.url;
-      
-      this.logger.info('Page fetched', { 
-        url, 
+
+      this.logger.info('Page fetched', {
+        url,
         status: response.status,
         finalURL: response.url,
         redirects: pageData.redirect_chain.length
@@ -145,18 +154,18 @@ export class Crawler {
         pageData.headers[key] = value;
         if (key.toLowerCase() === 'x-robots-tag') {
           pageData.x_robots_tag = value.toLowerCase();
-          this.logger.debug('X-Robots-Tag detected', { url, value });
         }
       });
 
       const contentType = response.headers.get('content-type') || '';
-      
+
+      // Classify by Content-Type ONLY
       if (contentType.toLowerCase().startsWith('text/html')) {
         pageData.resource_type = 'PAGE';
-        this.logger.debug('Classified as PAGE (HTML)', { url, contentType });
+        this.logger.info('✓ Classified as PAGE (HTML)', { url, contentType });
       } else {
         pageData.resource_type = 'RESOURCE';
-        this.logger.debug('Classified as RESOURCE (non-HTML)', { url, contentType });
+        this.logger.info('✓ Classified as RESOURCE (non-HTML)', { url, contentType });
         return;
       }
 
@@ -164,12 +173,14 @@ export class Crawler {
       this.logger.debug('Parsing HTML', { url, htmlLength: html.length });
       const parsed = this.htmlParser.parse(html, pageData.final_url);
 
+      pageData.html = html;
       pageData.title = parsed.title;
       pageData.h1s = parsed.h1s;
       pageData.meta_robots = parsed.meta_robots;
       pageData.meta_description = parsed.meta_description;
       pageData.resources = parsed.resources;
-      
+      pageData.content_internal_links = parsed.content_links || [];  // For AI analysis
+
       this.logger.info('Page parsed', {
         url,
         title: parsed.title,
@@ -182,11 +193,12 @@ export class Crawler {
       for (const link of parsed.links) {
         if (link.isInternal) {
           pageData.internal_outgoing_links.push(link.normalized);
-          
-          this.recordLink(pageData.normalized_url, link.normalized);
 
-          if (!this.visited.has(link.normalized) && 
-              !this.queue.some(item => item.url === link.normalized)) {
+          // DUMB CRAWLER: Use raw URLs for link graph and queue
+          this.recordLink(url, link.normalized);
+
+          if (!this.visited.has(link.normalized) &&
+            !this.queue.some(item => item.url === link.normalized)) {
             this.queue.push({ url: link.normalized, depth: depth + 1 });
             internalLinksAdded++;
           }
@@ -194,7 +206,7 @@ export class Crawler {
           pageData.external_outgoing_links.push(link.normalized);
         }
       }
-      
+
       this.logger.debug('Links processed', {
         url,
         internalLinks: pageData.internal_outgoing_links.length,
@@ -203,63 +215,86 @@ export class Crawler {
       });
 
     } catch (error) {
-      this.logger.error('Error fetching page', { url, error: error.message });
+      this.logger.error('✗ Exception during fetch - classifying as PAGE', {
+        url,
+        error: error.message,
+        errorType: error.name,
+        stack: error.stack
+      });
       pageData.http_status = 0;
-      pageData.resource_type = 'RESOURCE';
+      pageData.resource_type = 'PAGE';
+      pageData.fetch_error = 'exception_during_fetch';
     }
   }
 
+  /**
+   * DUMB FETCH: Follow redirects until we get a non-3xx response or hit maxRedirects.
+   * No loop detection, no normalization - just record what happens.
+   * IssueDetector will analyze redirect_chain for loops/issues later.
+   */
   async fetchWithRedirects(url, pageData, redirectCount = 0) {
+    // Max redirects exceeded - this is a true failure
     if (redirectCount > this.maxRedirects) {
-      this.logger.warn('Max redirects exceeded', { url, redirectCount });
+      this.logger.warn('Max redirects exceeded', { url, redirectCount, chain: pageData.redirect_chain });
+      pageData.fetch_error = 'max_redirects_exceeded';
       return null;
     }
 
     try {
+      this.logger.debug('Fetching URL', { url, redirectCount });
+
       const response = await HTTPClient.fetch(url, {
-        headers: {
-          'User-Agent': 'Verisite-Auditor/1.0'
-        },
+        headers: { 'User-Agent': 'Verisite-Auditor/1.0' },
         timeout: this.timeout
       });
 
+      this.logger.info('HTTP response received', {
+        url,
+        status: response.status,
+        contentType: response.headers.get('content-type') || 'unknown',
+        redirectCount
+      });
+
+      // Case: 3xx Redirect
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get('location');
+
         if (!location) {
           this.logger.warn('Redirect without location header', { url, status: response.status });
           return response;
         }
 
-        const redirectURL = this.normalizer.normalize(location, url);
-        if (!redirectURL) {
-          this.logger.warn('Invalid redirect URL', { url, location });
+        // Resolve relative URLs to absolute
+        let redirectURL;
+        try {
+          redirectURL = new URL(location, url).href;
+        } catch (e) {
+          this.logger.warn('Invalid redirect URL', { url, location, error: e.message });
           return response;
         }
 
+        // Record and follow
         pageData.redirect_chain.push(url);
-        this.logger.debug('Following redirect', { 
-          from: url, 
-          to: redirectURL, 
+        this.logger.debug('Following redirect', {
+          from: url,
+          to: redirectURL,
           status: response.status,
           redirectCount: redirectCount + 1
         });
 
-        if (pageData.redirect_chain.includes(redirectURL)) {
-          pageData.redirect_chain.push(redirectURL);
-          this.logger.error('Redirect loop detected', { 
-            url, 
-            redirectURL,
-            chain: pageData.redirect_chain 
-          });
-          return null;
-        }
-
         return this.fetchWithRedirects(redirectURL, pageData, redirectCount + 1);
       }
 
+      // Case: Non-3xx response (2xx, 4xx, 5xx) - we're done
       return response;
+
     } catch (error) {
-      this.logger.error('HTTP request failed', { url, error: error.message });
+      this.logger.error('HTTP request failed', {
+        url,
+        error: error.message,
+        errorType: error.name
+      });
+      pageData.fetch_error = 'network_error';
       return null;
     }
   }
@@ -282,7 +317,7 @@ export class Crawler {
 
     let orphanCount = 0;
     let pageOnlyCount = 0;
-    
+
     for (const [url, pageData] of this.pages.entries()) {
       if (pageData.isPage()) {
         const count = incomingCounts.get(url) || 0;
@@ -295,7 +330,7 @@ export class Crawler {
         pageData.incoming_internal_link_count = 0;
       }
     }
-    
+
     this.logger.info('Incoming link counts built (PAGE URLs only)', {
       htmlPages: pageOnlyCount,
       pagesWithNoIncomingLinks: orphanCount

@@ -5,6 +5,7 @@ import { Crawler } from './crawler/crawler.js';
 import { IssueDetector } from './detectors/issueDetector.js';
 import { Logger } from './utils/logger.js';
 import { OutputWriter } from './utils/outputWriter.js';
+import { AIService } from './utils/aiService.js';
 
 export class Auditor {
   constructor(seedURL, options = {}) {
@@ -12,16 +13,17 @@ export class Auditor {
     this.options = {
       maxPages: options.maxPages || 100,
       maxDepth: options.maxDepth || 5,
-      onProgress: options.onProgress || (() => {}),
-      auditId: options.auditId || null
+      onProgress: options.onProgress || (() => { }),
+      auditId: options.auditId || null,
+      enableAI: options.enableAI !== false  // Default enabled
     };
-    
+
     this.normalizer = new URLNormalizer(seedURL);
     this.robotsParser = new RobotsParser();
     this.sitemapParser = new SitemapParser(this.normalizer);
     this.logger = new Logger('AUDITOR');
     this.outputWriter = new OutputWriter();
-    
+
     this.logger.info('Auditor initialized', {
       seedURL,
       maxPages: this.options.maxPages,
@@ -32,7 +34,7 @@ export class Auditor {
 
   async audit() {
     const startTime = Date.now();
-    
+
     try {
       this.logger.info('=== AUDIT STARTED ===');
       this.options.onProgress({ type: 'init', message: 'Starting audit...' });
@@ -62,12 +64,19 @@ export class Auditor {
 
       this.logger.info('PHASE 4: Detecting issues');
       this.options.onProgress({ type: 'detect', message: 'Detecting issues...' });
+
+      // Initialize AI service (modular - can be disabled)
+      const aiService = new AIService({ enabled: this.options.enableAI });
+
       const detector = new IssueDetector(
         crawlResult.pages,
         sitemapURLs,
         this.seedURL,
         this.normalizer,
-        this.robotsParser
+        this.robotsParser,
+        aiService,
+        this.outputWriter,
+        this.options.auditId
       );
 
       const issues = await detector.detectAll();
@@ -78,7 +87,7 @@ export class Auditor {
         pagesCrawled: crawlResult.pages.length,
         issuesFound: issues.length
       });
-      
+
       this.options.onProgress({ type: 'complete', message: 'Audit complete!' });
 
       const result = {
@@ -95,7 +104,7 @@ export class Auditor {
         issues: issues,
         issue_summary: this.summarizeIssues(issues)
       };
-      
+
       this.logger.info('Audit result summary', {
         issueTypes: Object.keys(result.issue_summary).length,
         topIssues: Object.entries(result.issue_summary)
@@ -103,7 +112,7 @@ export class Auditor {
           .slice(0, 5)
           .map(([type, count]) => `${type}: ${count}`)
       });
-      
+
       if (this.options.auditId) {
         this.logger.info('Writing audit results to files');
         const outputPath = await this.outputWriter.writeAuditResults(
@@ -113,16 +122,16 @@ export class Auditor {
         result.output_path = outputPath;
         this.logger.success('Audit results saved to disk', { outputPath });
       }
-      
+
       return result;
     } catch (error) {
       this.logger.error('=== AUDIT FAILED ===', {
         error: error.message,
         stack: error.stack
       });
-      this.options.onProgress({ 
-        type: 'error', 
-        message: `Audit failed: ${error.message}` 
+      this.options.onProgress({
+        type: 'error',
+        message: `Audit failed: ${error.message}`
       });
       throw error;
     }
@@ -130,7 +139,7 @@ export class Auditor {
 
   summarizeIssues(issues) {
     const summary = {};
-    
+
     for (const issue of issues) {
       if (!summary[issue.issue_type]) {
         summary[issue.issue_type] = 0;

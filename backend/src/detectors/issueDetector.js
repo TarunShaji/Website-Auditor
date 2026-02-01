@@ -1,25 +1,31 @@
 import { HTTPClient } from '../utils/httpClient.js';
 import { Logger } from '../utils/logger.js';
+import { LinkIntentPipeline } from '../pipelines/linkIntentPipeline.js';
 
 export class IssueDetector {
-  constructor(pages, sitemapURLs, seedURL, normalizer, robotsParser) {
+  constructor(pages, sitemapURLs, seedURL, normalizer, robotsParser, aiService = null, outputWriter = null, auditId = null) {
     this.pages = pages;
     this.sitemapURLs = new Set(sitemapURLs);
     this.seedURL = seedURL;
     this.normalizer = normalizer;
     this.robotsParser = robotsParser;
+    this.aiService = aiService;
+    this.outputWriter = outputWriter;
+    this.auditId = auditId;
     this.issues = [];
     this.logger = new Logger('ISSUE_DETECTOR');
-    
+
     this.logger.info('Issue detector initialized', {
       totalPages: pages.length,
-      sitemapURLs: sitemapURLs.length
+      sitemapURLs: sitemapURLs.length,
+      aiEnabled: aiService?.isEnabled() || false
     });
   }
 
-  detectAll() {
-    this.logger.info('Starting issue detection (17 types)');
-    
+  async detectAll() {
+    const aiEnabled = this.aiService?.isEnabled() || false;
+    this.logger.info(`Starting issue detection (17 deterministic + ${aiEnabled ? '1 AI' : '0 AI'} checks)`);
+
     const detectionMethods = [
       { name: 'Broken Pages', fn: () => this.detectBrokenPages() },
       { name: 'Broken Internal Links', fn: () => this.detectBrokenInternalLinks() },
@@ -37,12 +43,13 @@ export class IssueDetector {
       { name: 'Multiple H1', fn: () => this.detectMultipleH1() },
       { name: 'Mixed Content', fn: () => this.detectMixedContent() },
       { name: 'Duplicate Meta Description', fn: () => this.detectDuplicateMetaDescription() },
-      { name: 'Resources Blocked by Robots', fn: () => this.detectResourcesBlockedByRobots() }
+      { name: 'Resources Blocked by Robots', fn: () => this.detectResourcesBlockedByRobots() },
+      { name: 'Link Intent Mismatch (AI)', fn: () => this.detectLinkIntentMismatch() }
     ];
 
     for (const { name, fn } of detectionMethods) {
       const beforeCount = this.issues.length;
-      fn();
+      await fn();
       const foundCount = this.issues.length - beforeCount;
       if (foundCount > 0) {
         this.logger.warn(`${name}: ${foundCount} issue(s) found`);
@@ -99,8 +106,12 @@ export class IssueDetector {
   }
 
   async detectBrokenExternalLinks() {
+    // TEMPORARY: Disabled (can take hours on large sites)
+    this.logger.info('Broken External Links: Detection disabled (testing)');
+    return;
+
     const externalLinks = new Map();
-    
+
     for (const page of this.pages) {
       for (const link of page.external_outgoing_links) {
         if (!externalLinks.has(link)) {
@@ -251,10 +262,10 @@ export class IssueDetector {
 
     for (const page of this.pages) {
       if (page.resource_type !== 'PAGE') continue;
-      
-      if (page.incoming_internal_link_count === 0 && 
-          page.normalized_url !== normalizedSeed &&
-          !page.blocked_by_robots) {
+
+      if (page.incoming_internal_link_count === 0 &&
+        page.normalized_url !== normalizedSeed &&
+        !page.blocked_by_robots) {
         this.issues.push({
           issue_type: 'ZERO_INCOMING_LINKS',
           url: page.url,
@@ -270,7 +281,7 @@ export class IssueDetector {
   detectZeroOutgoingLinks() {
     for (const page of this.pages) {
       if (page.resource_type !== 'PAGE') continue;
-      
+
       if (page.internal_outgoing_links.length === 0 && page.http_status === 200) {
         this.issues.push({
           issue_type: 'ZERO_OUTGOING_LINKS',
@@ -287,7 +298,7 @@ export class IssueDetector {
   detectMissingTitle() {
     for (const page of this.pages) {
       if (page.resource_type !== 'PAGE') continue;
-      
+
       if (page.http_status === 200 && (!page.title || page.title.trim() === '')) {
         this.issues.push({
           issue_type: 'MISSING_TITLE',
@@ -306,7 +317,7 @@ export class IssueDetector {
 
     for (const page of this.pages) {
       if (page.resource_type !== 'PAGE') continue;
-      
+
       if (page.http_status === 200 && page.title && page.title.trim() !== '') {
         if (!titleMap.has(page.title)) {
           titleMap.set(page.title, []);
@@ -336,7 +347,7 @@ export class IssueDetector {
   detectMissingH1() {
     for (const page of this.pages) {
       if (page.resource_type !== 'PAGE') continue;
-      
+
       if (page.http_status === 200 && page.h1s.length === 0) {
         this.issues.push({
           issue_type: 'MISSING_H1',
@@ -353,7 +364,7 @@ export class IssueDetector {
   detectMultipleH1() {
     for (const page of this.pages) {
       if (page.resource_type !== 'PAGE') continue;
-      
+
       if (page.http_status === 200 && page.h1s.length > 1) {
         this.issues.push({
           issue_type: 'MULTIPLE_H1',
@@ -369,42 +380,10 @@ export class IssueDetector {
   }
 
   detectMixedContent() {
-    for (const page of this.pages) {
-      if (page.resource_type !== 'PAGE') continue;
-      
-      if (this.normalizer.getProtocol(page.url) === 'https') {
-        const mixedResources = [];
-
-        for (const img of page.resources.images || []) {
-          if (this.normalizer.getProtocol(img) === 'http') {
-            mixedResources.push({ type: 'image', url: img });
-          }
-        }
-
-        for (const script of page.resources.scripts || []) {
-          if (this.normalizer.getProtocol(script) === 'http') {
-            mixedResources.push({ type: 'script', url: script });
-          }
-        }
-
-        for (const stylesheet of page.resources.stylesheets || []) {
-          if (this.normalizer.getProtocol(stylesheet) === 'http') {
-            mixedResources.push({ type: 'stylesheet', url: stylesheet });
-          }
-        }
-
-        if (mixedResources.length > 0) {
-          this.issues.push({
-            issue_type: 'MIXED_CONTENT',
-            url: page.url,
-            explanation: `HTTPS page loads ${mixedResources.length} HTTP resources`,
-            evidence: {
-              mixed_resources: mixedResources
-            }
-          });
-        }
-      }
-    }
+    // Disabled: resources.images/scripts/stylesheets removed from output to reduce file size
+    // from 392 MB to 1 MB. Mixed content detection requires full resource URLs which are
+    // no longer stored. Re-enable if resources are added back to PageData output.
+    return;
   }
 
   detectDuplicateMetaDescription() {
@@ -412,7 +391,7 @@ export class IssueDetector {
 
     for (const page of this.pages) {
       if (page.resource_type !== 'PAGE') continue;
-      
+
       if (page.http_status === 200 && page.meta_description && page.meta_description.trim() !== '') {
         if (!descriptionMap.has(page.meta_description)) {
           descriptionMap.set(page.meta_description, []);
@@ -434,51 +413,36 @@ export class IssueDetector {
   }
 
   detectResourcesBlockedByRobots() {
-    if (!this.robotsParser) {
+    // Disabled: resources.scripts/stylesheets removed from output to reduce file size
+    // This detector requires full resource URLs which are no longer stored
+    // Re-enable if resources are added back to PageData output
+    return;
+  }
+
+  /**
+   * AI-powered Link Intent Mismatch Detection
+   * Runs asynchronously after deterministic checks
+   */
+  async detectLinkIntentMismatch() {
+    if (!this.aiService || !this.aiService.isEnabled()) {
+      this.logger.info('AI service not enabled - skipping link intent mismatch detection');
       return;
     }
 
-    for (const page of this.pages) {
-      if (page.resource_type !== 'PAGE') continue;
-      
-      if (page.http_status !== 200) {
-        continue;
-      }
+    this.logger.info('Starting AI-powered link intent mismatch detection');
 
-      const blockedResources = [];
+    const pipeline = new LinkIntentPipeline(
+      this.aiService,
+      this.pages,
+      this.outputWriter,
+      this.auditId
+    );
 
-      for (const script of page.resources.scripts || []) {
-        if (this.normalizer.isInternal(script) && !this.robotsParser.isAllowed(script)) {
-          const rule = this.robotsParser.getDisallowRule(script);
-          blockedResources.push({
-            resource_url: script,
-            resource_type: 'script',
-            robots_rule: rule
-          });
-        }
-      }
+    const issues = await pipeline.run();
+    this.issues.push(...issues);
 
-      for (const stylesheet of page.resources.stylesheets || []) {
-        if (this.normalizer.isInternal(stylesheet) && !this.robotsParser.isAllowed(stylesheet)) {
-          const rule = this.robotsParser.getDisallowRule(stylesheet);
-          blockedResources.push({
-            resource_url: stylesheet,
-            resource_type: 'stylesheet',
-            robots_rule: rule
-          });
-        }
-      }
-
-      for (const resource of blockedResources) {
-        this.issues.push({
-          issue_type: 'RESOURCE_BLOCKED_BY_ROBOTS_TXT',
-          page_url: page.url,
-          resource_url: resource.resource_url,
-          resource_type: resource.resource_type,
-          robots_rule: resource.robots_rule,
-          explanation: 'The page references a resource that is disallowed by robots.txt.'
-        });
-      }
-    }
+    this.logger.info('Link intent mismatch detection complete', {
+      issuesFound: issues.length
+    });
   }
 }
