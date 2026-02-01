@@ -77,10 +77,26 @@ npm run dev
 16. Mixed Content (HTTPS → HTTP)
 17. Resources Blocked by robots.txt
 
+## AI-Assisted Features (Optional)
+
+When AI is enabled via `ANTHROPIC_API_KEY`:
+
+### Post-Crawl URL Filtering
+- Intelligent filtering of pages for intent analysis
+- Excludes low-value URLs (pagination, tracking params, utility pages)
+- Reduces AI cost by 40-60%
+- Output: `intent-url-filter.json` with eligible/excluded URLs
+
+### Link Intent Mismatch Detection
+- AI-powered semantic analysis of link-destination alignment
+- Identifies misleading link text
+- Concurrent request queue (rate limit handling)
+- Output: Detailed mismatch reports with confidence scores
+
 ## Design Principles
 
-- ❌ No AI inference
-- ❌ No qualitative judgments
+- ❌ No AI inference (core features)
+- ✅ Optional AI for advanced semantic analysis
 - ✅ Only objective, provable states
 - ✅ Reproducible results
 - ✅ Structured output
