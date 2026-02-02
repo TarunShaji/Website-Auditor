@@ -1,6 +1,5 @@
 import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/Card';
-import { Progress } from './ui/Progress';
 import {
   CheckCircle2,
   Circle,
@@ -11,7 +10,9 @@ import {
   Search,
   AlertTriangle,
   Sparkles,
-  Network
+  Network,
+  Link as LinkIcon,
+  Clock
 } from 'lucide-react';
 
 const PHASES = [
@@ -49,13 +50,13 @@ function PhaseItem({ phase, status, detail }) {
   const Icon = phase.icon;
 
   return (
-    <div className={`flex items-center gap-4 p-3 rounded-lg transition-all ${status === 'active' ? 'bg-blue-50 border border-blue-200' :
-        status === 'complete' ? 'bg-green-50/50' :
-          'opacity-50'
+    <div className={`flex items-center gap-4 p-3 rounded-lg transition-all ${status === 'active' ? 'bg-green-500/10 border border-green-500/30' :
+        status === 'complete' ? 'bg-green-500/5 border border-transparent' :
+          'opacity-40 border border-transparent'
       }`}>
-      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${status === 'complete' ? 'bg-green-100 text-green-600' :
-          status === 'active' ? 'bg-blue-100 text-blue-600' :
-            'bg-slate-100 text-slate-400'
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${status === 'complete' ? 'bg-green-500/20 text-green-500' :
+          status === 'active' ? 'bg-green-500/20 text-green-400' :
+            'bg-muted text-muted-foreground'
         }`}>
         {status === 'complete' ? (
           <CheckCircle2 className="w-5 h-5" />
@@ -66,21 +67,71 @@ function PhaseItem({ phase, status, detail }) {
         )}
       </div>
       <div className="flex-1">
-        <div className={`font-medium ${status === 'active' ? 'text-blue-900' :
-            status === 'complete' ? 'text-green-800' :
-              'text-slate-500'
+        <div className={`font-medium ${status === 'active' ? 'text-green-400' :
+            status === 'complete' ? 'text-green-500/80' :
+              'text-muted-foreground'
           }`}>
           {phase.label}
-          {phase.optional && <span className="text-xs ml-2 text-slate-400">(optional)</span>}
+          {phase.optional && <span className="text-xs ml-2 text-muted-foreground">(optional)</span>}
         </div>
         {detail && status === 'active' && (
-          <div className="text-sm text-blue-600">{detail}</div>
+          <div className="text-sm text-green-400/80">{detail}</div>
         )}
       </div>
-      <Icon className={`w-5 h-5 ${status === 'active' ? 'text-blue-500' :
-          status === 'complete' ? 'text-green-500' :
-            'text-slate-300'
+      <Icon className={`w-5 h-5 ${status === 'active' ? 'text-green-400' :
+          status === 'complete' ? 'text-green-500/60' :
+            'text-muted-foreground/50'
         }`} />
+    </div>
+  );
+}
+
+// Circular Progress Ring Component
+function ProgressRing({ progress }) {
+  const circumference = 2 * Math.PI * 45; // radius = 45
+  const strokeDashoffset = circumference - (progress / 100) * circumference;
+
+  return (
+    <div className="relative w-48 h-48 mx-auto">
+      {/* Background glow */}
+      <div className="absolute inset-0 rounded-full bg-green-500/10 blur-xl" />
+
+      {/* SVG Ring */}
+      <svg className="w-48 h-48 transform -rotate-90" viewBox="0 0 100 100">
+        {/* Background circle */}
+        <circle
+          cx="50"
+          cy="50"
+          r="45"
+          fill="none"
+          stroke="hsl(240 3.7% 15.9%)"
+          strokeWidth="6"
+        />
+        {/* Progress circle */}
+        <circle
+          cx="50"
+          cy="50"
+          r="45"
+          fill="none"
+          stroke="url(#progressGradient)"
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          className="transition-all duration-500 ease-out"
+        />
+        <defs>
+          <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#22c55e" />
+            <stop offset="100%" stopColor="#16a34a" />
+          </linearGradient>
+        </defs>
+      </svg>
+
+      {/* Percentage text */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-5xl font-bold text-green-400">{Math.round(progress)}%</span>
+      </div>
     </div>
   );
 }
@@ -102,28 +153,101 @@ export function AuditProgress({ progress }) {
     ? (crawlStats.visited / crawlStats.total) * 100
     : 0;
 
+  // Check if complete
+  const isComplete = progress?.some(e => e.type === 'complete');
+  const displayProgress = isComplete ? 100 : progressValue;
+  const statusText = isComplete ? 'Scan Complete!' : 'Scanning...';
+
   return (
-    <div className="space-y-4">
-      <Card className="border-2 border-blue-100 bg-gradient-to-br from-white via-blue-50/30 to-indigo-50/30 shadow-lg">
-        <CardHeader className="border-b border-blue-100/50 bg-gradient-to-r from-blue-500/5 to-indigo-500/5">
-          <CardTitle className="flex items-center gap-3">
-            <div className="relative">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                <Globe className="w-5 h-5 text-white" />
+    <div className="space-y-6">
+      {/* Main Progress Card */}
+      <Card className="border-green-500/20 bg-gradient-to-b from-card to-background overflow-hidden">
+        <CardContent className="pt-8 pb-8">
+          {/* Circular Progress */}
+          <div className="mb-6">
+            <ProgressRing progress={displayProgress} />
+          </div>
+
+          {/* Status Text */}
+          <div className="text-center mb-8">
+            <div className="text-xl font-semibold text-green-400 mb-1">{statusText}</div>
+            {latestEvent?.url && (
+              <div className="text-sm text-muted-foreground">
+                {new URL(latestEvent.url).pathname}
               </div>
-              <div className="absolute inset-0 rounded-full bg-blue-500/30 animate-ping" />
+            )}
+          </div>
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-4 gap-3 mb-8">
+            <div className="text-center p-4 bg-muted/30 rounded-xl border border-border/50">
+              <div className="flex items-center justify-center gap-1.5 mb-2">
+                <LinkIcon className="w-4 h-4 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">URLs</span>
+              </div>
+              <div className="text-2xl font-bold text-foreground">{crawlStats.visited}</div>
             </div>
-            <div>
-              <span className="text-xl font-bold text-slate-800">Scanning in Progress</span>
-              <div className="text-sm font-normal text-slate-500">
-                {latestEvent?.url ? `Currently: ${new URL(latestEvent.url).pathname}` : 'Initializing...'}
+            <div className="text-center p-4 bg-green-500/10 rounded-xl border border-green-500/20">
+              <div className="flex items-center justify-center gap-1.5 mb-2">
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                <span className="text-xs text-muted-foreground">Pages</span>
+              </div>
+              <div className="text-2xl font-bold text-green-400">
+                {crawlStats.visited}<span className="text-sm text-muted-foreground">/{crawlStats.total}</span>
               </div>
             </div>
+            <div className="text-center p-4 bg-muted/30 rounded-xl border border-border/50">
+              <div className="flex items-center justify-center gap-1.5 mb-2">
+                <AlertTriangle className="w-4 h-4 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">Issues</span>
+              </div>
+              <div className="text-2xl font-bold text-amber-400">{latestEvent?.issues || 0}</div>
+            </div>
+            <div className="text-center p-4 bg-muted/30 rounded-xl border border-border/50">
+              <div className="flex items-center justify-center gap-1.5 mb-2">
+                <Clock className="w-4 h-4 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">Time</span>
+              </div>
+              <div className="text-2xl font-bold text-foreground">
+                {latestEvent?.elapsed ? `${Math.floor(latestEvent.elapsed / 60)}:${String(latestEvent.elapsed % 60).padStart(2, '0')}` : '0:00'}
+              </div>
+            </div>
+          </div>
+
+          {/* Activity Log */}
+          <div className="bg-black/50 rounded-xl border border-border/50 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="flex gap-1">
+                <div className="w-3 h-3 rounded-full bg-red-500" />
+                <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                <div className="w-3 h-3 rounded-full bg-green-500" />
+              </div>
+              <span className="text-xs text-muted-foreground">Activity Log</span>
+            </div>
+            <div className="space-y-1.5 terminal-log max-h-32 overflow-y-auto">
+              {progress?.slice(-8).map((event, idx) => (
+                <div key={idx} className="flex items-center gap-2 text-xs">
+                  <CheckCircle2 className="w-3 h-3 text-green-500 flex-shrink-0" />
+                  <span className="text-green-400">
+                    Checked {event.url ? new URL(event.url).pathname : event.type}
+                  </span>
+                  <span className="text-muted-foreground">- OK</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Phase Timeline */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Globe className="w-5 h-5 text-green-500" />
+            Scan Phases
           </CardTitle>
         </CardHeader>
-
-        <CardContent className="pt-6 space-y-6">
-          {/* Phase Timeline */}
+        <CardContent className="pt-0">
           <div className="space-y-2">
             {PHASES.map((phase) => {
               const status = getPhaseStatus(phase.id, progress);
@@ -149,37 +273,6 @@ export function AuditProgress({ progress }) {
               );
             })}
           </div>
-
-          {/* Progress Bar for Crawling */}
-          {latestEvent?.type === 'crawling' && (
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-600 font-medium">Crawl Progress</span>
-                <span className="font-bold text-blue-700">{Math.round(progressValue)}%</span>
-              </div>
-              <div className="relative">
-                <Progress value={progressValue} className="h-2" />
-              </div>
-            </div>
-          )}
-
-          {/* Live Metrics */}
-          {latestEvent?.type === 'crawling' && (
-            <div className="grid grid-cols-3 gap-3">
-              <div className="text-center p-4 bg-white rounded-xl border border-blue-100 shadow-sm">
-                <div className="text-2xl font-bold text-blue-700">{crawlStats.visited}</div>
-                <div className="text-xs text-slate-500 mt-1">Pages Crawled</div>
-              </div>
-              <div className="text-center p-4 bg-white rounded-xl border border-indigo-100 shadow-sm">
-                <div className="text-2xl font-bold text-indigo-700">{crawlStats.queued}</div>
-                <div className="text-xs text-slate-500 mt-1">In Queue</div>
-              </div>
-              <div className="text-center p-4 bg-white rounded-xl border border-purple-100 shadow-sm">
-                <div className="text-2xl font-bold text-purple-700">{crawlStats.total}</div>
-                <div className="text-xs text-slate-500 mt-1">Max Pages</div>
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>

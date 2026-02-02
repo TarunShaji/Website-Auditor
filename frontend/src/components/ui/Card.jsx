@@ -2,15 +2,15 @@ import React from 'react';
 
 export function Card({ children, className = '' }) {
   return (
-    <div className={`bg-white rounded-lg border border-border shadow-sm ${className}`}>
+    <div className={`bg-card rounded-lg border border-border/50 shadow-lg ${className}`}>
       {children}
     </div>
   );
 }
 
-export function CardHeader({ children, className = '' }) {
+export function CardHeader({ children, className = '', onClick }) {
   return (
-    <div className={`p-6 ${className}`}>
+    <div className={`p-6 ${className}`} onClick={onClick}>
       {children}
     </div>
   );
@@ -18,7 +18,7 @@ export function CardHeader({ children, className = '' }) {
 
 export function CardTitle({ children, className = '' }) {
   return (
-    <h3 className={`text-2xl font-semibold leading-none tracking-tight ${className}`}>
+    <h3 className={`text-xl font-semibold leading-none tracking-tight text-foreground ${className}`}>
       {children}
     </h3>
   );
