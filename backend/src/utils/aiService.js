@@ -100,7 +100,7 @@ export class AIService {
 
     initOpenAI() {
         this.openaiApiKey = process.env.OPENAI_API_KEY;
-        this.openaiModel = 'gpt-4.1-mini';  // User requested this model
+        this.openaiModel = 'gpt-5-mini';  // User requested this model
         this.openaiEndpoint = 'https://api.openai.com/v1/chat/completions';
 
         if (this.openaiApiKey) {

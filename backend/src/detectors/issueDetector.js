@@ -404,12 +404,18 @@ export class IssueDetector {
 
     for (const [metaDescription, urls] of descriptionMap.entries()) {
       if (urls.length > 1) {
-        this.issues.push({
-          issue_type: 'DUPLICATE_META_DESCRIPTION',
-          meta_description: metaDescription,
-          affected_urls: urls,
-          explanation: 'Multiple pages declare the same meta description.'
-        });
+        for (const url of urls) {
+          this.issues.push({
+            issue_type: 'DUPLICATE_META_DESCRIPTION',
+            url: url,
+            explanation: `Page has duplicate meta description: "${metaDescription}"`,
+            evidence: {
+              meta_description: metaDescription,
+              duplicate_count: urls.length,
+              all_urls: urls
+            }
+          });
+        }
       }
     }
   }
