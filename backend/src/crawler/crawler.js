@@ -12,7 +12,6 @@ export class Crawler {
     this.logger = new Logger('CRAWLER');
 
     this.maxPages = options.maxPages || 100;
-    this.maxDepth = options.maxDepth || 5;
     this.maxRedirects = options.maxRedirects || 5;
     this.timeout = options.timeout || 10000;
 
@@ -26,29 +25,23 @@ export class Crawler {
     this.logger.info('Crawler initialized', {
       seedURL,
       maxPages: this.maxPages,
-      maxDepth: this.maxDepth,
       timeout: this.timeout
     });
   }
 
   async crawl() {
     // DUMB CRAWLER: Use raw seed URL, no normalization
-    this.queue.push({ url: this.seedURL, depth: 0 });
+    this.queue.push(this.seedURL);
 
     this.logger.info('Starting crawl', { seedURL: this.seedURL });
 
     let pageCount = 0;
 
     while (this.queue.length > 0 && pageCount < this.maxPages) {
-      const { url, depth } = this.queue.shift();
+      const url = this.queue.shift();
 
       if (this.visited.has(url)) {
         this.logger.debug('Skipping already visited URL', { url });
-        continue;
-      }
-
-      if (depth > this.maxDepth) {
-        this.logger.debug('Skipping URL exceeding max depth', { url, depth, maxDepth: this.maxDepth });
         continue;
       }
 
@@ -56,7 +49,6 @@ export class Crawler {
 
       this.logger.info(`Crawling [${pageCount}/${this.maxPages} pages]`, {
         url,
-        depth,
         queueSize: this.queue.length
       });
 
@@ -81,7 +73,7 @@ export class Crawler {
         continue;
       }
 
-      await this.fetchPage(url, pageData, depth);
+      await this.fetchPage(url, pageData);
       this.pages.set(url, pageData);
 
       if (pageData.isPage()) {
@@ -120,7 +112,7 @@ export class Crawler {
     return result;
   }
 
-  async fetchPage(url, pageData, depth) {
+  async fetchPage(url, pageData) {
     try {
       this.logger.debug('Fetching page', { url });
       const response = await this.fetchWithRedirects(url, pageData);
@@ -198,8 +190,8 @@ export class Crawler {
           this.recordLink(url, link.normalized);
 
           if (!this.visited.has(link.normalized) &&
-            !this.queue.some(item => item.url === link.normalized)) {
-            this.queue.push({ url: link.normalized, depth: depth + 1 });
+            !this.queue.some(queuedUrl => queuedUrl === link.normalized)) {
+            this.queue.push(link.normalized);
             internalLinksAdded++;
           }
         } else {

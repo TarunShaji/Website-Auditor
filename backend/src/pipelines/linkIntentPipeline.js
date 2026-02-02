@@ -20,7 +20,7 @@ export class LinkIntentPipeline {
         this.logger = new Logger('INTENT_PIPELINE');
 
         // Worker configuration
-        this.workerCount = 5;
+        this.workerCount = 2;  // Reduced to avoid rate limits
         this.batchSize = 5;
 
         // Build pages map for destination lookup
@@ -44,7 +44,8 @@ export class LinkIntentPipeline {
             timestamp: new Date().toISOString(),
             pipeline_config: {
                 worker_count: this.workerCount,
-                batch_size: this.batchSize
+                batch_size: this.batchSize,
+                ai_provider: this.aiService.getProvider()
             },
             step1_content_links: {
                 pages_analyzed: this.pages.length,

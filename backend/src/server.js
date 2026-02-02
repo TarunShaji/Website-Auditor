@@ -17,23 +17,23 @@ app.use((req, res, next) => {
     ip: req.ip,
     userAgent: req.get('user-agent')
   });
-  
+
   res.on('finish', () => {
     const duration = Date.now() - start;
     logger.info(`${req.method} ${req.path} - ${res.statusCode}`, {
       duration: `${duration}ms`
     });
   });
-  
+
   next();
 });
 
 const activeAudits = new Map();
 
 app.post('/api/audit', async (req, res) => {
-  const { url, maxPages, maxDepth } = req.body;
+  const { url, maxPages, enableAI } = req.body;
 
-  logger.info('Audit request received', { url, maxPages, maxDepth });
+  logger.info('Audit request received', { url, maxPages, enableAI });
 
   if (!url) {
     logger.warn('Audit request rejected: URL missing');
@@ -48,21 +48,21 @@ app.post('/api/audit', async (req, res) => {
   }
 
   const auditId = Date.now().toString();
-  
+
   logger.success('Audit created', { auditId, url });
-  
-  res.json({ 
+
+  res.json({
     auditId,
     message: 'Audit started',
     statusUrl: `/api/audit/${auditId}/status`
   });
 
   const progressEvents = [];
-  
+
   const auditor = new Auditor(url, {
     maxPages: maxPages || 100,
-    maxDepth: maxDepth || 5,
     auditId: auditId,
+    enableAI: enableAI !== false,
     onProgress: (event) => {
       progressEvents.push({
         timestamp: Date.now(),
@@ -82,8 +82,8 @@ app.post('/api/audit', async (req, res) => {
 
   auditor.audit()
     .then(result => {
-      logger.success('Audit completed successfully', { 
-        auditId, 
+      logger.success('Audit completed successfully', {
+        auditId,
         pagesCrawled: result.crawl_stats.pages_crawled,
         issuesFound: result.crawl_stats.issues_found
       });
@@ -129,9 +129,9 @@ app.get('/api/audit/:auditId/result', (req, res) => {
 
   if (audit.status !== 'completed') {
     logger.warn('Result request for incomplete audit', { auditId, status: audit.status });
-    return res.status(400).json({ 
+    return res.status(400).json({
       error: 'Audit not completed',
-      status: audit.status 
+      status: audit.status
     });
   }
 
@@ -140,7 +140,7 @@ app.get('/api/audit/:auditId/result', (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  res.json({ 
+  res.json({
     service: 'Verisite Backend API',
     version: '1.0.0',
     endpoints: {
@@ -155,9 +155,9 @@ app.get('/', (req, res) => {
 app.get('/health', (req, res) => {
   const uptime = process.uptime();
   const memoryUsage = process.memoryUsage();
-  
-  res.json({ 
-    status: 'ok', 
+
+  res.json({
+    status: 'ok',
     service: 'Verisite Backend',
     uptime: `${uptime.toFixed(2)}s`,
     memory: {

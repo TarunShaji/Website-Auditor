@@ -1,6 +1,7 @@
 import { HTTPClient } from '../utils/httpClient.js';
 import { Logger } from '../utils/logger.js';
 import { LinkIntentPipeline } from '../pipelines/linkIntentPipeline.js';
+import { PageIntentPipeline } from '../pipelines/pageIntentPipeline.js';
 
 export class IssueDetector {
   constructor(pages, sitemapURLs, seedURL, normalizer, robotsParser, aiService = null, outputWriter = null, auditId = null) {
@@ -44,7 +45,8 @@ export class IssueDetector {
       { name: 'Mixed Content', fn: () => this.detectMixedContent() },
       { name: 'Duplicate Meta Description', fn: () => this.detectDuplicateMetaDescription() },
       { name: 'Resources Blocked by Robots', fn: () => this.detectResourcesBlockedByRobots() },
-      { name: 'Link Intent Mismatch (AI)', fn: () => this.detectLinkIntentMismatch() }
+      { name: 'Link Intent Mismatch (AI)', fn: () => this.detectLinkIntentMismatch() },
+      { name: 'Page Intent Issues (AI)', fn: () => this.detectPageIntentIssues() }
     ];
 
     for (const { name, fn } of detectionMethods) {
@@ -443,6 +445,36 @@ export class IssueDetector {
 
     this.logger.info('Link intent mismatch detection complete', {
       issuesFound: issues.length
+    });
+  }
+
+  /**
+   * AI-powered Page Intent Issue Detection
+   * Detects SOFT_404 and PAGE_INTENT_MISMATCH issues
+   * Runs AFTER link intent mismatch detection (sequential, not concurrent)
+   */
+  async detectPageIntentIssues() {
+    if (!this.aiService || !this.aiService.isEnabled()) {
+      this.logger.info('AI service not enabled - skipping page intent issue detection');
+      return;
+    }
+
+    this.logger.info('Starting AI-powered page intent issue detection');
+
+    const pipeline = new PageIntentPipeline(
+      this.aiService,
+      this.pages,
+      this.outputWriter,
+      this.auditId
+    );
+
+    const issues = await pipeline.run();
+    this.issues.push(...issues);
+
+    this.logger.info('Page intent issue detection complete', {
+      issuesFound: issues.length,
+      soft404s: issues.filter(i => i.issue_type === 'SOFT_404').length,
+      intentMismatches: issues.filter(i => i.issue_type === 'PAGE_INTENT_MISMATCH').length
     });
   }
 }

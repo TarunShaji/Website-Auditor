@@ -12,7 +12,6 @@ export class Auditor {
     this.seedURL = seedURL;
     this.options = {
       maxPages: options.maxPages || 100,
-      maxDepth: options.maxDepth || 5,
       onProgress: options.onProgress || (() => { }),
       auditId: options.auditId || null,
       enableAI: options.enableAI !== false  // Default enabled
@@ -27,7 +26,6 @@ export class Auditor {
     this.logger.info('Auditor initialized', {
       seedURL,
       maxPages: this.options.maxPages,
-      maxDepth: this.options.maxDepth,
       auditId: this.options.auditId
     });
   }
@@ -55,7 +53,6 @@ export class Auditor {
         this.robotsParser,
         {
           maxPages: this.options.maxPages,
-          maxDepth: this.options.maxDepth,
           onProgress: this.options.onProgress
         }
       );
