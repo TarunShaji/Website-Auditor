@@ -31,9 +31,9 @@ app.use((req, res, next) => {
 const activeAudits = new Map();
 
 app.post('/api/audit', async (req, res) => {
-  const { url, maxPages, enableAI } = req.body;
+  const { url, maxPages, unlimited, enableAI } = req.body;
 
-  logger.info('Audit request received', { url, maxPages, enableAI });
+  logger.info('Audit request received', { url, maxPages, unlimited, enableAI });
 
   if (!url) {
     logger.warn('Audit request rejected: URL missing');
@@ -49,7 +49,7 @@ app.post('/api/audit', async (req, res) => {
 
   const auditId = Date.now().toString();
 
-  logger.success('Audit created', { auditId, url });
+  logger.success('Audit created', { auditId, url, mode: unlimited ? 'UNLIMITED' : 'LIMITED' });
 
   res.json({
     auditId,
@@ -60,7 +60,8 @@ app.post('/api/audit', async (req, res) => {
   const progressEvents = [];
 
   const auditor = new Auditor(url, {
-    maxPages: maxPages || 100,
+    maxPages: unlimited ? 0 : (maxPages || 100),
+    unlimited: unlimited === true,
     auditId: auditId,
     enableAI: enableAI !== false,
     onProgress: (event) => {

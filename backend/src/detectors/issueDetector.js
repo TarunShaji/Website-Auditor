@@ -242,14 +242,18 @@ export class IssueDetector {
   }
 
   detectSitemapOrphans() {
-    const crawledURLs = new Set(this.pages.map(p => p.normalized_url));
+    // Check for sitemap URLs that are NOT in pages at all
+    // (sitemap-only pages are now fetched, so they'll be in pages)
+    const crawledURLs = new Set(this.pages.map(p => p.url));
+    const normalizedURLs = new Set(this.pages.map(p => p.normalized_url));
 
     for (const sitemapURL of this.sitemapURLs) {
-      if (!crawledURLs.has(sitemapURL)) {
+      // Only flag as orphan if not in pages at all (neither raw nor normalized)
+      if (!crawledURLs.has(sitemapURL) && !normalizedURLs.has(sitemapURL)) {
         this.issues.push({
           issue_type: 'SITEMAP_ORPHAN',
           url: sitemapURL,
-          explanation: 'Page is in sitemap but not reachable via internal links',
+          explanation: 'Page is in sitemap but could not be fetched',
           evidence: {
             in_sitemap: true,
             crawled: false
@@ -273,7 +277,8 @@ export class IssueDetector {
           url: page.url,
           explanation: 'Page has zero incoming internal links',
           evidence: {
-            incoming_internal_link_count: 0
+            incoming_internal_link_count: 0,
+            discovery_method: page.discovery_method || 'SPIDER'
           }
         });
       }

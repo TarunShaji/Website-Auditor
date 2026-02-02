@@ -18,8 +18,9 @@ export class PageData {
     this.blocked_by_robots_rule = null;
     this.internal_outgoing_links = [];
     this.external_outgoing_links = [];
-    this.content_internal_links = [];  // NEW: For AI intent analysis only
+    this.content_internal_links = [];  // For AI intent analysis
     this.incoming_internal_link_count = 0;
+    this.discovery_method = 'SPIDER';  // 'SPIDER' or 'SITEMAP_ONLY'
     this.resources = {
       images: [],
       scripts: [],
@@ -44,6 +45,7 @@ export class PageData {
       final_url: this.final_url,
       redirect_chain: this.redirect_chain,
       fetch_error: this.fetch_error,
+      discovery_method: this.discovery_method,
 
       // SEO metadata
       title: this.title,
@@ -56,7 +58,7 @@ export class PageData {
       internal_outgoing_links: this.internal_outgoing_links,
       external_outgoing_links: this.external_outgoing_links,
       incoming_internal_link_count: this.incoming_internal_link_count,
-      content_internal_links: this.content_internal_links,  // For AI intent analysis
+      content_internal_links: this.content_internal_links,
 
       // Robots blocking
       blocked_by_robots: this.blocked_by_robots,

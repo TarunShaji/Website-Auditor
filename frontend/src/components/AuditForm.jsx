@@ -1,18 +1,24 @@
 import React, { useState } from 'react';
 import { Button } from './ui/Button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/Card';
-import { Search, Sparkles, ChevronDown, ChevronUp, Info, Globe } from 'lucide-react';
+import { Search, Sparkles, ChevronDown, ChevronUp, Info, Globe, Infinity, Gauge } from 'lucide-react';
 
 export function AuditForm({ onSubmit, isLoading }) {
   const [url, setUrl] = useState('');
-  const [maxPages, setMaxPages] = useState(100);
+  const [crawlMode, setCrawlMode] = useState('limited'); // 'limited' or 'unlimited'
+  const [maxPages, setMaxPages] = useState(500);
   const [enableAI, setEnableAI] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (url.trim()) {
-      onSubmit({ url: url.trim(), maxPages, enableAI });
+      onSubmit({
+        url: url.trim(),
+        maxPages: crawlMode === 'unlimited' ? 0 : maxPages,
+        unlimited: crawlMode === 'unlimited',
+        enableAI
+      });
     }
   };
 
@@ -52,6 +58,90 @@ export function AuditForm({ onSubmit, isLoading }) {
             </div>
           </div>
 
+          {/* Crawl Mode Toggle */}
+          <div className="space-y-4">
+            <label className="block text-sm font-semibold text-foreground">
+              Crawl Mode
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              {/* Limited Mode */}
+              <button
+                type="button"
+                onClick={() => setCrawlMode('limited')}
+                disabled={isLoading}
+                className={`p-4 rounded-xl border-2 transition-all ${crawlMode === 'limited'
+                    ? 'border-green-500 bg-green-500/10'
+                    : 'border-border bg-muted/30 hover:border-border/80'
+                  }`}
+              >
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <Gauge className={`w-5 h-5 ${crawlMode === 'limited' ? 'text-green-500' : 'text-muted-foreground'}`} />
+                  <span className={`font-semibold ${crawlMode === 'limited' ? 'text-green-500' : 'text-foreground'}`}>
+                    Limited
+                  </span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Up to {maxPages.toLocaleString()} pages
+                </div>
+              </button>
+
+              {/* Unlimited Mode */}
+              <button
+                type="button"
+                onClick={() => setCrawlMode('unlimited')}
+                disabled={isLoading}
+                className={`p-4 rounded-xl border-2 transition-all ${crawlMode === 'unlimited'
+                    ? 'border-blue-500 bg-blue-500/10'
+                    : 'border-border bg-muted/30 hover:border-border/80'
+                  }`}
+              >
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <Infinity className={`w-5 h-5 ${crawlMode === 'unlimited' ? 'text-blue-500' : 'text-muted-foreground'}`} />
+                  <span className={`font-semibold ${crawlMode === 'unlimited' ? 'text-blue-500' : 'text-foreground'}`}>
+                    Unlimited
+                  </span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Crawl entire site
+                </div>
+              </button>
+            </div>
+
+            {/* Page Limit Slider (only for limited mode) */}
+            {crawlMode === 'limited' && (
+              <div className="pt-2">
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-muted-foreground">Page limit</span>
+                  <span className="font-semibold text-green-500">{maxPages.toLocaleString()} pages</span>
+                </div>
+                <input
+                  type="range"
+                  min="100"
+                  max="1000"
+                  step="100"
+                  value={maxPages}
+                  onChange={(e) => setMaxPages(parseInt(e.target.value))}
+                  disabled={isLoading}
+                  className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-green-500"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                  <span>100</span>
+                  <span>500</span>
+                  <span>1,000</span>
+                </div>
+              </div>
+            )}
+
+            {crawlMode === 'unlimited' && (
+              <div className="flex items-start gap-2 text-xs text-blue-400 bg-blue-500/10 p-3 rounded-lg border border-blue-500/20">
+                <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span>
+                  Unlimited mode will crawl until all discoverable pages are visited. Large sites may take significant time.
+                </span>
+              </div>
+            )}
+          </div>
+
           {/* AI Toggle */}
           <div className="flex items-center justify-between p-4 bg-purple-500/10 rounded-xl border border-purple-500/20">
             <div className="flex items-center gap-3">
@@ -75,48 +165,6 @@ export function AuditForm({ onSubmit, isLoading }) {
             </label>
           </div>
 
-          {/* AI Info Tooltip */}
-          <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg border border-border/50">
-            <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
-            <span>
-              AI analysis runs <strong className="text-foreground">after</strong> crawling to detect link intent mismatches, soft 404s, and page intent issues. Deterministic findings are always shown first.
-            </span>
-          </div>
-
-          {/* Advanced Options Toggle */}
-          <button
-            type="button"
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            Advanced options
-          </button>
-
-          {/* Advanced Options Panel */}
-          {showAdvanced && (
-            <div className="p-4 bg-muted/30 rounded-xl border border-border/50 space-y-4">
-              <div>
-                <label htmlFor="maxPages" className="block text-sm font-medium text-foreground mb-2">
-                  Max Pages to Crawl
-                </label>
-                <input
-                  id="maxPages"
-                  type="number"
-                  value={maxPages}
-                  onChange={(e) => setMaxPages(parseInt(e.target.value))}
-                  min="1"
-                  max="1000"
-                  disabled={isLoading}
-                  className="w-full px-3 py-2 bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 disabled:opacity-50 text-foreground"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Crawler uses BFS - important pages are prioritized naturally
-                </p>
-              </div>
-            </div>
-          )}
-
           {/* Submit Button */}
           <Button
             type="submit"
@@ -131,3 +179,4 @@ export function AuditForm({ onSubmit, isLoading }) {
     </Card>
   );
 }
+

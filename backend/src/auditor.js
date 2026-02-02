@@ -2,6 +2,7 @@ import { URLNormalizer } from './utils/urlNormalizer.js';
 import { RobotsParser } from './parsers/robotsParser.js';
 import { SitemapParser } from './parsers/sitemapParser.js';
 import { Crawler } from './crawler/crawler.js';
+import { SitemapFetcher } from './crawler/sitemapFetcher.js';
 import { IssueDetector } from './detectors/issueDetector.js';
 import { Logger } from './utils/logger.js';
 import { OutputWriter } from './utils/outputWriter.js';
@@ -37,14 +38,23 @@ export class Auditor {
       this.logger.info('=== AUDIT STARTED ===');
       this.options.onProgress({ type: 'init', message: 'Starting audit...' });
 
+      // ═══════════════════════════════════════════════════════════════════
+      // PHASE 1: Fetch robots.txt
+      // ═══════════════════════════════════════════════════════════════════
       this.logger.info('PHASE 1: Fetching robots.txt');
       this.options.onProgress({ type: 'robots', message: 'Fetching robots.txt...' });
       await this.robotsParser.fetch(this.seedURL);
 
+      // ═══════════════════════════════════════════════════════════════════
+      // PHASE 2: Fetch sitemap.xml
+      // ═══════════════════════════════════════════════════════════════════
       this.logger.info('PHASE 2: Fetching sitemap.xml');
       this.options.onProgress({ type: 'sitemap', message: 'Fetching sitemap.xml...' });
       const sitemapURLs = await this.sitemapParser.fetch(this.seedURL);
 
+      // ═══════════════════════════════════════════════════════════════════
+      // PHASE 3: Spider crawl (BFS)
+      // ═══════════════════════════════════════════════════════════════════
       this.logger.info('PHASE 3: Crawling website');
       this.options.onProgress({ type: 'crawl_start', message: 'Starting crawl...' });
       const crawler = new Crawler(
@@ -53,12 +63,68 @@ export class Auditor {
         this.robotsParser,
         {
           maxPages: this.options.maxPages,
+          unlimited: this.options.unlimited,
           onProgress: this.options.onProgress
         }
       );
 
       const crawlResult = await crawler.crawl();
 
+      // ═══════════════════════════════════════════════════════════════════
+      // PHASE 3.5: Sitemap-only fetch (NEW)
+      // Fetch URLs in sitemap but not visited by spider
+      // Does NOT affect link graph or incoming link counts
+      // ═══════════════════════════════════════════════════════════════════
+      this.logger.info('PHASE 3.5: Fetching sitemap-only URLs');
+      this.options.onProgress({ type: 'sitemap_fetch', message: 'Fetching sitemap-only URLs...' });
+
+      // Identify sitemap URLs not visited by spider
+      const spiderVisitedURLs = new Set(crawlResult.pages.map(p => p.url));
+      const sitemapOnlyURLs = sitemapURLs.filter(url => !spiderVisitedURLs.has(url));
+
+      this.logger.info('Sitemap orphans identified', {
+        totalSitemapURLs: sitemapURLs.length,
+        spiderVisited: spiderVisitedURLs.size,
+        sitemapOnly: sitemapOnlyURLs.length
+      });
+
+      let sitemapOnlyPages = [];
+      if (sitemapOnlyURLs.length > 0) {
+        const sitemapFetcher = new SitemapFetcher(
+          this.normalizer,
+          this.robotsParser,
+          { onProgress: this.options.onProgress }
+        );
+        const fetchedPages = await sitemapFetcher.fetchSitemapOnlyPages(sitemapOnlyURLs);
+        sitemapOnlyPages = fetchedPages.map(p => p.toJSON());
+
+        // Merge sitemap-only pages into crawl result (no overwrites)
+        crawlResult.pages = [...crawlResult.pages, ...sitemapOnlyPages];
+
+        this.logger.success('Sitemap-only pages merged', {
+          sitemapOnlyCount: sitemapOnlyPages.length,
+          totalPages: crawlResult.pages.length
+        });
+      } else {
+        this.logger.info('No sitemap-only URLs to fetch');
+      }
+
+      // Write sitemap-fetch.json if we have an auditId
+      if (this.options.auditId && sitemapOnlyURLs.length > 0) {
+        const auditDir = this.outputWriter.createAuditDirectory(this.options.auditId);
+        await this.outputWriter.writeSitemapFetchResult(auditDir, {
+          generated: new Date().toISOString(),
+          sitemap_urls_total: sitemapURLs.length,
+          spider_visited_count: spiderVisitedURLs.size,
+          sitemap_only_count: sitemapOnlyPages.length,
+          sitemap_only_pages: sitemapOnlyPages
+        });
+      }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // PHASE 4: Issue detection (deterministic + AI)
+      // Now runs on ALL pages (spider + sitemap-only)
+      // ═══════════════════════════════════════════════════════════════════
       this.logger.info('PHASE 4: Detecting issues');
       this.options.onProgress({ type: 'detect', message: 'Detecting issues...' });
 
@@ -91,6 +157,8 @@ export class Auditor {
         seed_url: this.seedURL,
         crawl_stats: {
           pages_crawled: crawlResult.pages.length,
+          spider_pages: spiderVisitedURLs.size,
+          sitemap_only_pages: sitemapOnlyPages.length,
           sitemap_urls: sitemapURLs.length,
           issues_found: issues.length,
           duration_seconds: parseFloat(duration)
@@ -147,3 +215,4 @@ export class Auditor {
     return summary;
   }
 }
+

@@ -11,7 +11,9 @@ export class Crawler {
     this.htmlParser = new HTMLParser(normalizer);
     this.logger = new Logger('CRAWLER');
 
+    // Crawl mode: unlimited (0 or null) means crawl until queue is empty
     this.maxPages = options.maxPages || 100;
+    this.unlimitedMode = options.unlimited === true || this.maxPages === 0;
     this.maxRedirects = options.maxRedirects || 5;
     this.timeout = options.timeout || 10000;
 
@@ -20,11 +22,16 @@ export class Crawler {
     this.pages = new Map();
     this.linkGraph = new Map();
 
+    // Crawl rate tracking
+    this.startTime = null;
+    this.urlsDiscovered = 0;  // Total unique URLs found (visited + queued)
+
     this.onProgress = options.onProgress || (() => { });
 
     this.logger.info('Crawler initialized', {
       seedURL,
-      maxPages: this.maxPages,
+      maxPages: this.unlimitedMode ? 'unlimited' : this.maxPages,
+      unlimited: this.unlimitedMode,
       timeout: this.timeout
     });
   }
@@ -32,12 +39,17 @@ export class Crawler {
   async crawl() {
     // DUMB CRAWLER: Use raw seed URL, no normalization
     this.queue.push(this.seedURL);
+    this.startTime = Date.now();
 
-    this.logger.info('Starting crawl', { seedURL: this.seedURL });
+    this.logger.info('Starting crawl', {
+      seedURL: this.seedURL,
+      mode: this.unlimitedMode ? 'UNLIMITED' : 'LIMITED'
+    });
 
     let pageCount = 0;
 
-    while (this.queue.length > 0 && pageCount < this.maxPages) {
+    // Continue while: queue has items AND (unlimited OR under limit)
+    while (this.queue.length > 0 && (this.unlimitedMode || pageCount < this.maxPages)) {
       const url = this.queue.shift();
 
       if (this.visited.has(url)) {
@@ -46,18 +58,35 @@ export class Crawler {
       }
 
       this.visited.add(url);
+      this.urlsDiscovered = this.visited.size + this.queue.length;
 
-      this.logger.info(`Crawling [${pageCount}/${this.maxPages} pages]`, {
+      // Calculate crawl rate (pages per second)
+      const elapsedSeconds = (Date.now() - this.startTime) / 1000;
+      const crawlRate = elapsedSeconds > 0 ? (pageCount / elapsedSeconds).toFixed(1) : 0;
+
+      const logMessage = this.unlimitedMode
+        ? `Crawling [${pageCount} pages, ${this.queue.length} queued]`
+        : `Crawling [${pageCount}/${this.maxPages} pages]`;
+
+      this.logger.info(logMessage, {
         url,
-        queueSize: this.queue.length
+        queueSize: this.queue.length,
+        crawlRate: `${crawlRate}/sec`
       });
 
       this.onProgress({
         type: 'crawling',
         url: url,
+        // Legacy fields (for backward compatibility)
         visited: this.visited.size,
         queued: this.queue.length,
-        total: this.maxPages
+        total: this.unlimitedMode ? null : this.maxPages,
+        // Enhanced stats
+        pagesCrawled: pageCount,
+        urlsDiscovered: this.urlsDiscovered,
+        queueRemaining: this.queue.length,
+        crawlRate: parseFloat(crawlRate),
+        isUnlimited: this.unlimitedMode
       });
 
       const pageData = new PageData(url, url);
@@ -86,12 +115,16 @@ export class Crawler {
 
     const htmlPageCount = Array.from(this.pages.values()).filter(p => p.isPage()).length;
     const resourceCount = Array.from(this.pages.values()).filter(p => p.isResource()).length;
+    const totalDuration = ((Date.now() - this.startTime) / 1000).toFixed(2);
+    const finalCrawlRate = (htmlPageCount / parseFloat(totalDuration)).toFixed(1);
 
     this.logger.success('Crawl completed', {
       totalURLsVisited: this.visited.size,
       htmlPages: htmlPageCount,
       resources: resourceCount,
-      queueRemaining: this.queue.length
+      queueRemaining: this.queue.length,
+      duration: `${totalDuration}s`,
+      avgCrawlRate: `${finalCrawlRate}/sec`
     });
 
     this.logger.info('Building incoming link counts (PAGE URLs only)');
@@ -111,6 +144,7 @@ export class Crawler {
 
     return result;
   }
+
 
   async fetchPage(url, pageData) {
     try {

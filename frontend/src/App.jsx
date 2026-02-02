@@ -15,7 +15,7 @@ function App() {
     error: null
   });
 
-  const startAudit = async ({ url, maxPages, enableAI }) => {
+  const startAudit = async ({ url, maxPages, unlimited, enableAI }) => {
     try {
       setAuditState({
         status: 'starting',
@@ -30,7 +30,7 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ url, maxPages, enableAI }),
+        body: JSON.stringify({ url, maxPages, unlimited, enableAI }),
       });
 
       if (!response.ok) {

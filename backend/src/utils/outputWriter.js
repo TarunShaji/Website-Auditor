@@ -224,4 +224,16 @@ export class OutputWriter {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
     this.logger.debug('JSON file written', { file: filename });
   }
+
+  /**
+   * Write sitemap-fetch.json with sitemap-only pages
+   */
+  async writeSitemapFetchResult(auditDir, sitemapFetchData) {
+    const filePath = path.join(auditDir, 'sitemap-fetch.json');
+    fs.writeFileSync(filePath, JSON.stringify(sitemapFetchData, null, 2), 'utf-8');
+    this.logger.info('Sitemap fetch result written', {
+      file: 'sitemap-fetch.json',
+      sitemapOnlyCount: sitemapFetchData.sitemap_only_count
+    });
+  }
 }
