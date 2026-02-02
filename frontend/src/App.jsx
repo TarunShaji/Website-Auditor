@@ -15,7 +15,7 @@ function App() {
     error: null
   });
 
-  const startAudit = async ({ url, maxPages, maxDepth }) => {
+  const startAudit = async ({ url, maxPages, enableAI }) => {
     try {
       setAuditState({
         status: 'starting',
@@ -30,7 +30,7 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ url, maxPages, maxDepth }),
+        body: JSON.stringify({ url, maxPages, enableAI }),
       });
 
       if (!response.ok) {
@@ -205,10 +205,12 @@ function App() {
           )}
         </div>
 
-        <footer className="mt-16 pt-8 border-t border-slate-200 text-center">
-          <p className="text-sm text-slate-500">
-            Verisite performs <span className="font-semibold text-slate-700">deterministic analysis only</span>.
-            No AI, no inference, no qualitative judgments.
+        <footer className="mt-16 pt-8 border-t border-slate-200 text-center space-y-2">
+          <p className="text-sm text-slate-600">
+            <span className="font-semibold text-slate-800">Verisite</span> — Technical SEO auditing with precision crawling
+          </p>
+          <p className="text-xs text-slate-500">
+            Deterministic analysis first • AI insights optional • No guesswork
           </p>
         </footer>
       </div>
